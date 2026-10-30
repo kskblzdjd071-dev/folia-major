@@ -1,0 +1,66 @@
+name: Build Folia iOS (unsigned IPA)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      VITE_NETEASE_API_BASE: ${{ vars.VITE_NETEASE_API_BASE }}
+      VITE_KUGOU_API_BASE: ${{ vars.VITE_KUGOU_API_BASE }}
+      VITE_FOLIA_API_BASE: ${{ vars.VITE_FOLIA_API_BASE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Use relative base path for Capacitor
+        run: |
+          sed -i '' "s|base: process.env.ELECTRON === 'true' ? './' : '/',|base: './',|" vite.config.ts
+          grep -n "base:" vite.config.ts
+
+      - name: Install Capacitor
+        run: npm i @capacitor/core @capacitor/cli @capacitor/ios
+
+      - name: Build web
+        run: npm run build
+
+      - name: Init Capacitor and add iOS
+        run: |
+          npx cap init Folia com.example.folia --web-dir=dist
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Archive (unsigned)
+        run: |
+          cd ios/App
+          if [ -d App.xcworkspace ]; then
+            TARGET="-workspace App.xcworkspace"
+          else
+            TARGET="-project App.xcodeproj"
+          fi
+          xcodebuild $TARGET \
+            -scheme App \
+            -configuration Release \
+            -archivePath $PWD/build/Folia.xcarchive \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package IPA
+        run: |
+          cd ios/App/build
+          mkdir Payload
+          cp -R Folia.xcarchive/Products/Applications/App.app Payload/
+          zip -r Folia.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Folia-unsigned-ipa
+          path: ios/App/build/Folia.ipa
