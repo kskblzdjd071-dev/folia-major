@@ -33,7 +33,15 @@ jobs:
 
       - name: Init Capacitor and add iOS
         run: |
-          npx cap init Folia com.example.folia --web-dir=dist
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.example.folia",
+            "appName": "Folia",
+            "webDir": "dist",
+            "backgroundColor": "#000000",
+            "ios": { "contentInset": "always" }
+          }
+          EOF
           npx cap add ios
           npx cap sync ios
 
